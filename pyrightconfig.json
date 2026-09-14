@@ -1,0 +1,7 @@
+{
+  "venvPath": ".",
+  "venv": ".venv",
+  "pythonVersion": "3.11",
+  "include": ["ingestion", "pattern_mining", "tests"],
+  "exclude": [".venv", "data"]
+}

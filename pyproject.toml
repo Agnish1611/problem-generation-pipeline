@@ -1,0 +1,43 @@
+[project]
+name = "ingestion"
+version = "0.1.0"
+description = "Dataset Ingestion Layer: normalizes messy coding-problem sources into a unified, versioned, auditable dataset."
+requires-python = ">=3.10"
+readme = "README.md"
+dependencies = [
+    "pydantic>=2.6,<3",
+    "beautifulsoup4>=4.12,<5",
+    "sentence-transformers>=2.7",
+    "umap-learn>=0.5",
+    "hdbscan>=0.8",
+    "scikit-learn>=1.4",
+    "numpy>=1.24",
+    "pandas>=2.0",
+    "pyyaml>=6.0,<7",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+]
+
+[project.scripts]
+ingest = "ingestion.cli:main"
+pattern-mine = "pattern_mining.cli:main"
+transform-templates = "transform.cli:main"
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["ingestion*", "pattern_mining*", "sandbox*", "transform*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests", "pattern_mining/tests", "sandbox/tests", "transform/tests"]
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+check_untyped_defs = true

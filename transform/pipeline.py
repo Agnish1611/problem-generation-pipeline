@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Optional
@@ -28,6 +29,8 @@ from .storage import (
 from .validator import DEFAULT_VARIANT_COUNT
 
 logger = logging.getLogger(__name__)
+
+_PROGRESS_EVERY = 10  # emit a running-totals line every N processed records
 
 
 @dataclass
@@ -88,6 +91,8 @@ def generate_templates_for_records(
     force: bool = False,
     max_attempts: int = DEFAULT_MAX_ATTEMPTS,
     variant_count: int = DEFAULT_VARIANT_COUNT,
+    llm_timeout: float = 300.0,
+    llm_max_tokens: int = 512,
 ) -> TemplatePipelineMetrics:
     """Runs the reauthor pipeline over `records` (canonical record dicts,
     the shape found in unified_dataset.json), persisting every accepted
@@ -103,8 +108,15 @@ def generate_templates_for_records(
     llm_client = llm_client or get_default_client()
     pattern_by_problem_id = _load_pattern_assignments(db_path)
     metrics = TemplatePipelineMetrics()
+    total = len(records)
+    run_start = time.monotonic()
 
-    for record in records:
+    logger.info(
+        "transform pipeline starting: %d record(s) to process, LLM=%s, max_attempts=%d, variant_count=%d, timeout=%.0fs, max_tokens=%d",
+        total, llm_client.__class__.__name__, max_attempts, variant_count, llm_timeout, llm_max_tokens,
+    )
+
+    for idx, record in enumerate(records, 1):
         canonical_id = record.get("id")
         if not canonical_id:
             continue
@@ -113,6 +125,7 @@ def generate_templates_for_records(
 
         if not force and read_templates_for_canonical_problem(canonical_id, db_path):
             metrics.records_skipped_existing += 1
+            logger.debug("[%d/%d] SKIP (already has template): %s", idx, total, canonical_id)
             continue
 
         if record.get("data_unavailable"):
@@ -120,10 +133,14 @@ def generate_templates_for_records(
             metrics.rejections.append(
                 {"canonical_problem_id": canonical_id, "reason": "data_unavailable (no solution to validate against)"}
             )
+            logger.info("[%d/%d] SKIP data_unavailable: %s", idx, total, canonical_id)
             continue
 
         pattern_label = pattern_by_problem_id.get(canonical_id)
+        title = record.get("title", canonical_id)
+        logger.info("[%d/%d] Processing: %s  (pattern=%s)", idx, total, title, pattern_label or "none")
 
+        record_start = time.monotonic()
         try:
             result = reauthor_template(
                 record,
@@ -131,21 +148,32 @@ def generate_templates_for_records(
                 pattern_label=pattern_label,
                 max_attempts=max_attempts,
                 variant_count=variant_count,
+                timeout=llm_timeout,
+                max_tokens=llm_max_tokens,
             )
         except LLMCallError as exc:
             metrics.llm_errors += 1
             metrics.rejections.append({"canonical_problem_id": canonical_id, "reason": f"LLM call failed: {exc}"})
-            logger.error("LLM call failed for canonical_id=%s: %s", canonical_id, exc)
+            logger.error("[%d/%d] LLM ERROR (%.1fs): %s — %s", idx, total, time.monotonic() - record_start, canonical_id, exc)
             continue
+        elapsed = time.monotonic() - record_start
 
         if result.status == "rejected_invalid_json":
             metrics.rejected_invalid_json += 1
             metrics.rejections.append({"canonical_problem_id": canonical_id, "reason": result.reasons})
+            logger.warning(
+                "[%d/%d] REJECTED invalid_json (%.1fs, %d attempt(s)): %s — %s",
+                idx, total, elapsed, result.attempts, canonical_id, result.reasons,
+            )
             continue
 
         if result.status == "rejected_validation_failed":
             metrics.rejected_validation_failed += 1
             metrics.rejections.append({"canonical_problem_id": canonical_id, "reason": result.reasons})
+            logger.warning(
+                "[%d/%d] REJECTED validation_failed (%.1fs): %s — %s",
+                idx, total, elapsed, canonical_id, result.reasons,
+            )
             continue
 
         # accepted
@@ -162,6 +190,43 @@ def generate_templates_for_records(
         metrics.total_variants_generated += len(result.variants)
         if result.template.needs_review:
             metrics.needs_review += 1
+            logger.info(
+                "[%d/%d] ACCEPTED needs_review (%.1fs, %d variant(s)): %s — review: %s",
+                idx, total, elapsed, len(result.variants), canonical_id,
+                result.template.review_reasons,
+            )
+        else:
+            logger.info(
+                "[%d/%d] ACCEPTED (%.1fs, %d variant(s)): %s",
+                idx, total, elapsed, len(result.variants), canonical_id,
+            )
+
+        # Running totals every _PROGRESS_EVERY records
+        if idx % _PROGRESS_EVERY == 0:
+            attempted = metrics.accepted + metrics.rejected_invalid_json + metrics.rejected_validation_failed
+            rate = f"{metrics.accepted / attempted:.0%}" if attempted else "n/a"
+            elapsed_total = time.monotonic() - run_start
+            avg_per_record = elapsed_total / idx
+            eta_secs = avg_per_record * (total - idx)
+            logger.info(
+                "--- progress %d/%d | accepted=%d rejected_json=%d rejected_val=%d llm_err=%d "
+                "| accept_rate=%s | elapsed=%.0fs ETA≈%.0fs ---",
+                idx, total,
+                metrics.accepted, metrics.rejected_invalid_json,
+                metrics.rejected_validation_failed, metrics.llm_errors,
+                rate, elapsed_total, eta_secs,
+            )
+
+    total_elapsed = time.monotonic() - run_start
+    attempted = metrics.accepted + metrics.rejected_invalid_json + metrics.rejected_validation_failed
+    logger.info(
+        "transform pipeline finished: %d considered, %d accepted, %d rejected_json, "
+        "%d rejected_val, %d llm_errors, %d skipped | accept_rate=%s | total=%.1fs",
+        metrics.records_considered, metrics.accepted, metrics.rejected_invalid_json,
+        metrics.rejected_validation_failed, metrics.llm_errors, metrics.records_skipped_existing,
+        f"{metrics.accepted / attempted:.0%}" if attempted else "n/a",
+        total_elapsed,
+    )
 
     return metrics
 
@@ -174,6 +239,8 @@ def generate_templates_for_patterns(
     force: bool = False,
     max_attempts: int = DEFAULT_MAX_ATTEMPTS,
     variant_count: int = DEFAULT_VARIANT_COUNT,
+    llm_timeout: float = 300.0,
+    llm_max_tokens: int = 512,
 ) -> TemplatePipelineMetrics:
     """Entry point matching the design doc's
     `transform.template_pipeline.generate_templates_for_patterns` call
@@ -193,4 +260,6 @@ def generate_templates_for_patterns(
         force=force,
         max_attempts=max_attempts,
         variant_count=variant_count,
+        llm_timeout=llm_timeout,
+        llm_max_tokens=llm_max_tokens,
     )

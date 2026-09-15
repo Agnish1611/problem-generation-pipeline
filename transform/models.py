@@ -27,8 +27,8 @@ class VariantGeneratorNotes(BaseModel):
 
     model_config = ConfigDict(extra="ignore")
 
-    n_range: Optional[list[float]] = None
-    value_range: Optional[list[float]] = None
+    n_range: Optional[list[Any]] = None       # advisory; model may return ints, floats, or strings
+    value_range: Optional[list[Any]] = None   # advisory; model may return e.g. 'ASCII_Printable'
     special_flags: list[str] = Field(default_factory=list)
 
 

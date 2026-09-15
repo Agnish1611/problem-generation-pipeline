@@ -166,11 +166,13 @@ class OllamaLLMClient:
         model: str = DEFAULT_MODEL,
         max_retries: int = 2,
         retry_backoff_seconds: float = 1.0,
+        think: bool = False,
     ):
         self.base_url = base_url
         self.model = model
         self.max_retries = max_retries
         self.retry_backoff_seconds = retry_backoff_seconds
+        self.think = think  # False = disable chain-of-thought for thinking models (e.g. qwen3, deepseek-r1)
 
     def _extract_text(self, payload: dict[str, Any]) -> str:
         # Ollama's documented non-streaming /api/generate shape.
@@ -196,13 +198,15 @@ class OllamaLLMClient:
         timeout: float = DEFAULT_TIMEOUT_SECONDS,
     ) -> LLMResponse:
         full_prompt = f"{system}\n\n{prompt}" if system else prompt
-        payload = {
+        payload: dict[str, Any] = {
             "model": self.model,
             "prompt": full_prompt,
             "temperature": temperature,
-            "max_tokens": max_tokens,
+            "num_predict": max_tokens,  # Ollama's actual field name (max_tokens is silently ignored)
             "stream": False,
         }
+        if not self.think:
+            payload["think"] = False  # disable <think>...</think> for reasoning models
         body = json.dumps(payload).encode("utf-8")
 
         last_error: Optional[Exception] = None
@@ -242,20 +246,25 @@ class OllamaLLMClient:
         ) from last_error
 
 
-def get_default_client() -> LLMClient:
+def get_default_client(think: bool = False) -> LLMClient:
     """Selects a client from environment variables, defaulting to the
     mock client since no local model is guaranteed to be running.
 
     Env vars:
-      TRANSFORM_LLM_MODE: "mock" (default) or "ollama"
+      TRANSFORM_LLM_MODE:  "mock" (default) or "ollama"
       TRANSFORM_LLM_MODEL: model tag to request, default "mistral:instruct"
-      TRANSFORM_LLM_URL: Ollama endpoint, default http://localhost:11434/api/generate
+      TRANSFORM_LLM_URL:   Ollama endpoint, default http://localhost:11434/api/generate
+      TRANSFORM_LLM_THINK: "true" / "1" to enable chain-of-thought for thinking
+                           models (qwen3, deepseek-r1, etc.). Default "false".
     """
     mode = os.environ.get("TRANSFORM_LLM_MODE", "mock").strip().lower()
     if mode == "ollama":
+        env_think = os.environ.get("TRANSFORM_LLM_THINK", "false").strip().lower()
+        effective_think = think or env_think in ("true", "1", "yes")
         return OllamaLLMClient(
             base_url=os.environ.get("TRANSFORM_LLM_URL", DEFAULT_OLLAMA_URL),
             model=os.environ.get("TRANSFORM_LLM_MODEL", DEFAULT_MODEL),
+            think=effective_think,
         )
     if mode != "mock":
         logger.warning("Unknown TRANSFORM_LLM_MODE=%r, falling back to mock client", mode)

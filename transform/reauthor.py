@@ -87,7 +87,8 @@ def reauthor_template(
     max_attempts: int = DEFAULT_MAX_ATTEMPTS,
     variant_count: int = DEFAULT_VARIANT_COUNT,
     temperature: float = 0.0,
-    max_tokens: int = 800,
+    max_tokens: int = 512,
+    timeout: float = 300.0,
 ) -> ReauthorResult:
     """Runs the full reauthor control flow for one canonical record.
     Never raises for expected failure modes (malformed JSON after
@@ -116,6 +117,7 @@ def reauthor_template(
             system=SYSTEM_PROMPT,
             temperature=temperature,
             max_tokens=max_tokens,
+            timeout=timeout,
         )
         raw_response = response.text
 

@@ -24,7 +24,6 @@ from .models import CanonicalRecord, Difficulty
 TITLE_JACCARD_THRESHOLD = 0.8
 DESCRIPTION_JACCARD_THRESHOLD = 0.6
 EMBEDDING_SIMILARITY_THRESHOLD = 0.90
-AST_SIGNATURE_MATCH = True  # exact match required for code-level dedup
 
 DESCRIPTION_TOKEN_WINDOW = 50
 

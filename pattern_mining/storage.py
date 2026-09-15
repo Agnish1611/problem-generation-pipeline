@@ -174,7 +174,6 @@ def read_patterns(db_path: str | Path) -> List[dict[str, Any]]:
                 "pattern_id": r["pattern_id"],
                 "label": r["label"],
                 "size": r["size"],
-                "count": r["size"],
                 "representative": r["representative"],
                 "top_tags": top_tags,
                 "difficulty_distribution": diff_dist,

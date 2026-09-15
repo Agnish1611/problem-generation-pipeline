@@ -17,12 +17,13 @@ problem-generation-pipeline/
 │   ├── assigner.py            # Incremental assignment & running centroid updates
 │   ├── storage.py             # SQLite migration, pattern/assignment persistence
 │   ├── pipeline.py            # Full end-to-end pipeline orchestrator
-│   ├── cli.py                 # CLI interface (run & assign subcommands)
+│   ├── cli.py                 # CLI interface (run, assign, view subcommands)
 │   └── tests/
 │       ├── test_embeddings.py
 │       ├── test_clustering.py
 │       ├── test_assigner.py
-│       └── test_storage.py
+│       ├── test_storage.py
+│       └── test_viewer.py
 ```
 
 ---
@@ -106,7 +107,7 @@ View the generated summary table in markdown:
 | UMAP Dimension | `64` | `clustering.py` | Intermediate dimension for UMAP before HDBSCAN. |
 | UMAP Random State | `42` | `clustering.py` | Ensures deterministic UMAP dimensionality reduction. |
 | Min Cluster Size | `10` | `clustering.py` | Minimum points to form an HDBSCAN cluster. |
-| Min Samples | `5` | `clustering.py` | Neighborhood density threshold in HDBSCAN. |
+| Min Samples | `1` | `clustering.py` | Neighborhood density threshold in HDBSCAN. |
 | Selection Method | `eom` | `clustering.py` | Excess of Mass cluster selection in HDBSCAN. |
 | Assignment Threshold | `0.80` | `assigner.py` | Minimum cosine similarity to assign to an existing pattern. |
 

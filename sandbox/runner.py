@@ -262,9 +262,6 @@ def canonicalize_value(value: Any) -> Any:
     return value
 
 
-# Backwards-compatible internal alias.
-_canonicalize = canonicalize_value
-
 
 _HARNESS_SOURCE = textwrap.dedent(
     """\
@@ -458,8 +455,8 @@ def run_test_cases(
             )
             continue
 
-        actual = _canonicalize(run_result.value)
-        expected = _canonicalize(expected_parsed)
+        actual = canonicalize_value(run_result.value)
+        expected = canonicalize_value(expected_parsed)
         cases.append(
             CaseResult(
                 input=raw_input,

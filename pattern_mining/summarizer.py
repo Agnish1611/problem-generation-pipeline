@@ -142,7 +142,6 @@ def summarize_cluster(
     return {
         "pattern_id": f"pattern_{cluster_label}",
         "label": label,
-        "count": len(valid_members),
         "size": len(valid_members),
         "representative": representative_id,
         "members": valid_members,

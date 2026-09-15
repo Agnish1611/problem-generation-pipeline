@@ -192,21 +192,3 @@ def _run_hdbscan(
         )
         return clusterer.fit_predict(reduced_embeddings.astype(np.float64))
 
-
-def compute_clusters_from_unified(
-    unified_json_path: str | Path = "data/output/unified_dataset.json",
-    cache_dir: str | Path = "data/processed",
-    recompute_embeddings: bool = False,
-    **cluster_params: Any,
-) -> Dict[str, int]:
-    """Load unified dataset, compute/load embeddings, run clustering, and return problem_id -> label mapping."""
-    from .embeddings import compute_all_embeddings
-
-    embeddings, ids = compute_all_embeddings(
-        unified_json_path=unified_json_path,
-        cache_dir=cache_dir,
-        recompute=recompute_embeddings,
-    )
-
-    labels = cluster_embeddings(embeddings, ids, **cluster_params)
-    return {pid: int(lbl) for pid, lbl in zip(ids, labels)}

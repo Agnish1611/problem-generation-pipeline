@@ -37,12 +37,6 @@ CREATE TABLE IF NOT EXISTS records (
 
 CREATE INDEX IF NOT EXISTS idx_records_source_trace
     ON records (source_name, raw_file, raw_offset);
-
-CREATE TABLE IF NOT EXISTS ingest_cursor (
-    source_key TEXT PRIMARY KEY,
-    last_offset INTEGER NOT NULL,
-    updated_at TEXT NOT NULL
-);
 """
 
 
@@ -127,26 +121,6 @@ class Storage:
         cur = self.conn.execute(query)
         return [CanonicalRecord.model_validate_json(row[0]) for row in cur.fetchall()]
 
-    def get_cursor(self, source_key: str) -> int:
-        cur = self.conn.execute(
-            "SELECT last_offset FROM ingest_cursor WHERE source_key = ?", (source_key,)
-        )
-        row = cur.fetchone()
-        return row[0] if row else -1
-
-    def set_cursor(self, source_key: str, offset: int) -> None:
-        from datetime import datetime, timezone
-
-        self.conn.execute(
-            """
-            INSERT INTO ingest_cursor (source_key, last_offset, updated_at)
-            VALUES (?, ?, ?)
-            ON CONFLICT(source_key) DO UPDATE SET
-                last_offset=excluded.last_offset, updated_at=excluded.updated_at
-            """,
-            (source_key, offset, datetime.now(timezone.utc).isoformat()),
-        )
-        self.conn.commit()
 
 
 def export_unified_dataset(records: list[CanonicalRecord], output_path: str | Path) -> Path:

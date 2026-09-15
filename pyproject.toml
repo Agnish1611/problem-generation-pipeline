@@ -1,7 +1,7 @@
 [project]
-name = "ingestion"
+name = "code-royale-pipeline"
 version = "0.1.0"
-description = "Dataset Ingestion Layer: normalizes messy coding-problem sources into a unified, versioned, auditable dataset."
+description = "Problem-Generation Pipeline: ingestion, pattern mining, template re-authoring, and sandbox validation for the Code Royale dataset."
 requires-python = ">=3.10"
 readme = "README.md"
 dependencies = [
